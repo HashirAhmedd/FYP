@@ -16,7 +16,6 @@ export default function Prediction({ userEmail }) {
       sector: "transportation",
       gas: "co2",
       year: 2025,
-      month: 1,
     });
   }, []);
 
@@ -52,6 +51,7 @@ export default function Prediction({ userEmail }) {
       const data = await response.json();
       setPrediction(data);
       setLoading(false);
+      
     } catch (error) {
       console.error("Error fetching historical data:", error);
     }
@@ -68,7 +68,7 @@ export default function Prediction({ userEmail }) {
           {prediction != null && <EmissionPrediction prediction={prediction} />}
           {prediction != null && <MonthlyTrends prediction={prediction} />}
           {prediction != null && (
-            <LLMResponse response={prediction.llm_insights} />
+            <LLMResponse response={prediction.data?.llm_insights} />
           )}
         </>
       )}

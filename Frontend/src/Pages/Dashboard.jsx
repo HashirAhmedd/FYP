@@ -74,7 +74,7 @@ export default function Dashboard({ userEmail }) {
           {historicalData != null && (
             <EmissionsBySector historicalData={historicalData} />
           )}
-          {historicalData != null && (
+          {historicalData != null && historicalData.llm_insights &&(
             <LLMResponse response={historicalData.llm_insights} />
           )}
         </>

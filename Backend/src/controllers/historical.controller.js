@@ -1,5 +1,11 @@
 import prisma from "../db/prisma.js";
 import { generateGeminiInsights } from "../utils/gemini.js";
+import { generateGroqInsights } from "../utils/groq.js";
+import {
+    buildInsightCacheKey,
+    getCachedInsightByKey,
+    saveInsightCache,
+} from "../utils/insightCache.js";
 
 const getSectorEmissions = async (req, res) => {
     try {
@@ -10,6 +16,17 @@ const getSectorEmissions = async (req, res) => {
                 error: "country, sector_name, start_year, end_year are required",
             });
         }
+
+        const { cacheKey, normalizedParams } =
+            buildInsightCacheKey({
+                country,
+                sector_name,
+                start_year,
+                end_year,
+                gas_name,
+            });
+
+        const cachedInsight = await getCachedInsightByKey(cacheKey);
 
         // 0. Fetch country ID
         const countryResult = await prisma.$queryRaw`
@@ -124,7 +141,7 @@ const getSectorEmissions = async (req, res) => {
         for (const [g, v] of Object.entries(gasTotals)) {
             gasRatios[g] =
                 gasSum > 0
-                    ? Math.round((v / gasSum) * 100 * 10000) / 10000
+                    ? Math.round((v / gasSum) * 10000) / 10000
                     : 0;
         }
 
@@ -194,11 +211,44 @@ const getSectorEmissions = async (req, res) => {
 
         // Generate LLM insights
         try {
-            const llmInsights = await generateGeminiInsights(finalResponse);
-            finalResponse.llm_insights = llmInsights;
+            if (cachedInsight?.insightText) {
+                finalResponse.llm_insights = cachedInsight.insightText;
+            } else {
+                let llmInsights = null;
+                let providerUsed = null;
+
+                if (process.env.GROQ_API_KEY) {
+                    try {
+                        llmInsights = await generateGroqInsights(finalResponse);
+                        if (llmInsights) {
+                            providerUsed = "groq";
+                        }
+                    } catch (groqError) {
+                        console.error("Groq Insights Error:", groqError.message);
+                    }
+                }
+
+                if (!llmInsights && process.env.GEMINI_API_KEY) {
+                    llmInsights = await generateGeminiInsights(finalResponse);
+                    if (llmInsights) {
+                        providerUsed = "gemini";
+                    }
+                }
+
+                finalResponse.llm_insights = llmInsights;
+
+                if (llmInsights && providerUsed) {
+                    await saveInsightCache({
+                        cacheKey,
+                        normalizedParams,
+                        insightText: llmInsights,
+                        providerUsed,
+                    });
+                }
+            }
         } catch (err) {
             console.error("LLM Insights Error:", err.message);
-            finalResponse.llm_insights = "Insights generation failed";
+            finalResponse.llm_insights = null;
         }
 
         return res.status(200).json(finalResponse);

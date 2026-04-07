@@ -6,7 +6,7 @@ export default function Emission({ historicalData }) {
     return <div>Loading...</div>;
   }
 
-  // Calculate year-over-year change from 2023 to 2024
+
   const yearlyTotals = data.yearly_totals || {};
   const years = Object.keys(yearlyTotals).sort();
   

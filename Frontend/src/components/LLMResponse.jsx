@@ -1,9 +1,9 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef } from 'react';
 
 const LLMResponse = ({ response}) => {
   const contentRef = useRef(null);
   const scrollRef = useRef(null);
-
+  
   // Format response text with basic markdown support
   const formatResponse = (text) => {
     if (!text) return '';
@@ -16,9 +16,9 @@ const LLMResponse = ({ response}) => {
       .replace(/^### (.*$)/gm, '<h3 class="text-xl font-semibold mt-6 mb-3 text-gray-800">$1</h3>')
       .replace(/^## (.*$)/gm, '<h2 class="text-2xl font-bold mt-8 mb-4 text-gray-900">$1</h2>')
       .replace(/^# (.*$)/gm, '<h1 class="text-3xl font-bold mt-10 mb-5 text-gray-900">$1</h1>')
-      .replace(/^\* (.*$)/gm, '<li class="flex items-start mb-2 pl-2"><span class="text-emerald-500 mr-3 mt-1.5">•</span><span>$1</span></li>')
-      .replace(/^\- (.*$)/gm, '<li class="flex items-start mb-2 pl-2"><span class="text-emerald-500 mr-3 mt-1.5">-</span><span>$1</span></li>')
-      .replace(/^\d+\. (.*$)/gm, '<li class="flex items-start mb-2 pl-2"><span class="text-emerald-500 font-medium mr-3">$&</span><span>$1</span></li>');
+      .replace(/^\s*\*+\s+(.*$)/gm, '<li class="flex items-start mb-2 pl-2"><span class="text-emerald-600 font-extrabold text-lg leading-none mr-3 mt-0.5">•</span><span>$1</span></li>')
+      .replace(/^\s*-\s+(.*$)/gm, '<li class="flex items-start mb-2 pl-2"><span class="text-emerald-600 font-extrabold text-base leading-none mr-3 mt-0.5">-</span><span>$1</span></li>')
+      .replace(/^\s*(\d+)\.\s+(.*$)/gm, '<li class="flex items-start mb-2 pl-2"><span class="text-emerald-500 font-medium mr-3">$1.</span><span>$2</span></li>');
   };
 
   return (
@@ -31,8 +31,7 @@ const LLMResponse = ({ response}) => {
           </svg>
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">AI Response</h2>
-          <p className="text-gray-600">Generated response from LLM</p>
+          <h2 className="text-2xl font-bold text-gray-800">XAI Insights</h2>
         </div>
       </div>
 

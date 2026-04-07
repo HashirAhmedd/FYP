@@ -16,23 +16,27 @@ def preprocess_input(user_input, scaler_model, indexers):
 
     results = {}
 
+    # These encoded and scaled values are constant for every subsector/month in one request.
+    iso3_country_index = indexers["iso3_country"].get(country, -1)
+    sector_index = indexers["sector"].get(sector, -1)
+    gas_index = indexers["gas"].get(gas, -1)
+
+    base_features = np.array([[lat, lon, 0.0, year]], dtype=np.float64)
+    means = scaler_model["means"]
+    stds = scaler_model["stds"]
+
 
     for subsector in subsectors:
+        subsector_index = indexers["subsector"].get(subsector, -1)
         sequence = []
         for month in range(1, 13):
             duration = get_month_duration(year, month)
             month_sin = np.sin(2 * np.pi * month / 12)
             month_cos = np.cos(2 * np.pi * month / 12)
 
-            # Encode categorical features
-            iso3_country_index = indexers["iso3_country"].get(country, -1)
-            sector_index = indexers["sector"].get(sector, -1)
-            subsector_index = indexers["subsector"].get(subsector, -1)
-            gas_index = indexers["gas"].get(gas, -1)
-
             # Scale continuous features
-            features = np.array([[lat, lon, duration, year]], dtype=np.float64)
-            scaled_features = (features - scaler_model["means"]) / scaler_model["stds"]
+            base_features[0, 2] = duration
+            scaled_features = (base_features - means) / stds
 
             # Combine all features
             timestep = [

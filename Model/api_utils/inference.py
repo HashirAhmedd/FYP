@@ -4,21 +4,29 @@ from api_utils.preprocessing import preprocess_input
 def run_inference(user_input, model, scaler_model, indexers):
     preprocessed_data = preprocess_input(user_input, scaler_model, indexers)
 
+    if not preprocessed_data:
+        return {
+            "subsector_emissions": {},
+            "monthly_emissions": [0.0] * 12,
+            "total_emissions": 0.0,
+        }
+
     response = {
         "subsector_emissions": {},
         "monthly_emissions": [0.0] * 12,
         "total_emissions": 0.0
     }
 
-    for subsector, sequence in preprocessed_data.items():
-        sequence = np.expand_dims(sequence, axis=0)  # Shape: (1, 12, features)
+    subsectors = list(preprocessed_data.keys())
+    stacked_sequences = np.stack([preprocessed_data[subsector] for subsector in subsectors], axis=0)
 
-        # input_seq shape: (1, 12, 10)
-        cat_input = sequence[:, :, :4]      # First 4 are categorical
-        num_input = sequence[:, :, 4:]      # Remaining 6 are numerical
+    cat_input = stacked_sequences[:, :, :4]      # First 4 are categorical
+    num_input = stacked_sequences[:, :, 4:]      # Remaining 6 are numerical
 
-        predictions = model.predict([cat_input, num_input])[0]  # Shape: (12,)
-        emissions = np.expm1(predictions).tolist()  # Inverse of log1p
+    predictions = model.predict([cat_input, num_input], verbose=0)
+
+    for idx, subsector in enumerate(subsectors):
+        emissions = np.expm1(predictions[idx]).tolist()  # Inverse of log1p
 
         total = sum(emissions)
         response["subsector_emissions"][subsector] = {

@@ -7,6 +7,11 @@ from api_utils.xai.model_from_embeddings import get_model_from_embeddings
 from api_utils.xai.categorical_ig import compute_integrated_gradients_on_embeddings
 
 def calculate_yearly_categorical_ig(model, cat_batch, num_batch):
+    _, avg_importance = calculate_categorical_ig_breakdown(model, cat_batch, num_batch)
+    return avg_importance
+
+
+def calculate_categorical_ig_breakdown(model, cat_batch, num_batch):
     
     # Identify embedding layers in your model
     embedding_layers = []
@@ -82,17 +87,19 @@ def calculate_yearly_categorical_ig(model, cat_batch, num_batch):
     gas_importance = np.sum(ig_gas, axis=1)
 
     df_cat_ig = pd.DataFrame({
-        "Month": [f"Month {i+1}" for i in range(12)],
         "iso3_country_index": iso3_importance,
         "sector_index": sector_importance,
         "subsector_index": subsector_importance,
         "gas_index": gas_importance
-    })
+    }, index=range(1, 13))
 
-    # Drop the 'Month' column and calculate mean for each feature
-    avg_importance = df_cat_ig.drop(columns=["Month"]).mean().to_dict()
+    monthly_importance = {
+        int(month): {feature: float(value) for feature, value in row.items()}
+        for month, row in df_cat_ig.iterrows()
+    }
+    avg_importance = {feature: float(value) for feature, value in df_cat_ig.mean(axis=0).to_dict().items()}
 
-    return avg_importance
+    return monthly_importance, avg_importance
 
 
     

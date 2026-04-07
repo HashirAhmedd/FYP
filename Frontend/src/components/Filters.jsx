@@ -41,7 +41,7 @@ export default function Filters({fetchHistoricalData}) {
   const [selectedSector, setSelectedSector] = useState("Transportation");
   const [selectedEmissionType, setSelectedEmissionType] = useState("CO₂");
   const [startYearRange, setStartYearRange] = useState(2020);
-  const [endYearRange, setEndYearRange] = useState(previousYear);
+  const [endYearRange, setEndYearRange] = useState(2024);
 
   // Format sector name for display
   const formatSectorName = (key) => {
