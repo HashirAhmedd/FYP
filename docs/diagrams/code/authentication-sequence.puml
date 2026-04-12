@@ -1,0 +1,192 @@
+@startuml
+' ClimaX-AI Authentication Sequence (implementation-accurate)
+
+title ClimaX-AI - Authentication Sequence Diagram
+
+autonumber
+hide footbox
+
+actor User
+participant "Frontend\nApp.jsx" as App
+participant "Frontend\nPages/AuthModal.jsx" as AuthModal
+participant "Frontend\nLayout/Layout.jsx" as Layout
+participant "Frontend\nutils/api.js\napiFetch()" as ApiFetch
+participant "Backend\nsrc/app.js" as BackendApp
+participant "Backend\nsrc/routes/user.routes.js" as UserRoutes
+participant "Backend\nsrc/controllers/user.controlers.js" as UserController
+participant "Backend\nsrc/models/user.model.js\nUser" as UserModel
+database "MongoDB" as Mongo
+participant "jsonwebtoken" as JWT
+
+== App Startup Session Bootstrap ==
+User -> App: Open application
+activate App
+App -> App: useEffect() -> bootstrapSession()
+App -> ApiFetch: apiFetch("/api/v1/user/refresh-token", { method: "POST" })
+activate ApiFetch
+ApiFetch -> BackendApp: POST /api/v1/user/refresh-token\n(credentials: include)
+activate BackendApp
+BackendApp -> UserRoutes: route("/refresh-token")
+activate UserRoutes
+UserRoutes -> UserController: refreshAccessToken(req, res)
+activate UserController
+
+UserController -> UserController: incomingRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken
+alt incomingRefreshToken missing
+  UserController --> App: 401 { status: "failed", message: "Refresh token is missing" }
+  deactivate UserController
+  deactivate UserRoutes
+  deactivate BackendApp
+  deactivate ApiFetch
+  App -> App: setUser(null)
+  App -> App: setIsBootstrappingAuth(false)
+else refresh token present
+  UserController -> JWT: verify(incomingRefreshToken, REFRESH_TOKEN_SECRET)
+  activate JWT
+  JWT --> UserController: decodedToken._id
+  deactivate JWT
+
+  UserController -> UserModel: findById(decodedToken._id)
+  activate UserModel
+  UserModel -> Mongo: query User by _id
+  activate Mongo
+  Mongo --> UserModel: user document
+  deactivate Mongo
+  UserModel --> UserController: user
+  deactivate UserModel
+
+  alt user not found OR token mismatch
+    UserController --> App: 401 { status: "failed", message: "Invalid refresh token" }
+    App -> App: setUser(null)
+  else valid refresh token
+    UserController -> UserModel: user.generateAccessToken()
+    UserController -> UserModel: user.generateRefreshToken()
+    UserController -> UserModel: user.save({ validateBeforeSave: false })
+    UserController -> UserModel: findById(user._id).select("-password -refreshToken")
+
+    note right of UserController
+      getCookieOptions() from user.controlers.js:
+      - httpOnly: true
+      - secure: NODE_ENV === "production"
+      - sameSite: "none" in production, else "lax"
+    end note
+
+    UserController --> App: 200 + set-cookie(accessToken, refreshToken)\n{ status: "success", user, accessToken, refreshToken }
+    App -> App: extractUserFromPayload(refreshPayload)
+    App -> App: setUser(refreshedUser)
+  end
+
+  UserController -> App: finally setIsBootstrappingAuth(false)
+  deactivate UserController
+  deactivate UserRoutes
+  deactivate BackendApp
+  deactivate ApiFetch
+end
+deactivate App
+
+== Login Flow ==
+User -> AuthModal: Submit login form
+activate AuthModal
+AuthModal -> AuthModal: handleLoginSubmit(e)
+AuthModal -> ApiFetch: apiFetch("/api/v1/user/login", { method: "POST", body: loginData })
+activate ApiFetch
+ApiFetch -> BackendApp: POST /api/v1/user/login
+activate BackendApp
+BackendApp -> UserRoutes: route("/login")
+activate UserRoutes
+UserRoutes -> UserController: loginUser(req, res)
+activate UserController
+
+UserController -> UserModel: findOne({ email: email.toLowerCase() })
+activate UserModel
+UserModel -> Mongo: query User by email
+activate Mongo
+Mongo --> UserModel: user or null
+deactivate Mongo
+UserModel --> UserController: user
+deactivate UserModel
+
+alt invalid email or password
+  UserController --> AuthModal: 401 { status: "failed", message: "Invalid email or password" }
+  AuthModal -> User: alert(error.message)
+else valid credentials
+  UserController -> UserModel: user.comparePassword(password)
+  UserController -> UserModel: user.generateAccessToken()
+  UserController -> UserModel: user.generateRefreshToken()
+  UserController -> UserModel: user.refreshToken = refreshToken
+  UserController -> UserModel: user.save({ validateBeforeSave: false })
+  UserController -> UserModel: findById(user._id).select("-password -refreshToken")
+  UserController --> AuthModal: 200 + set-cookie(accessToken, refreshToken)\n{ status: "success", user, accessToken, refreshToken }
+
+  AuthModal -> App: onLoginSuccess(loggedInUser)
+  AuthModal -> AuthModal: setIsVisible(false)
+end
+
+deactivate UserController
+deactivate UserRoutes
+deactivate BackendApp
+deactivate ApiFetch
+deactivate AuthModal
+
+== Signup Flow ==
+User -> AuthModal: Submit signup form
+activate AuthModal
+AuthModal -> AuthModal: handleSignupSubmit(e)
+AuthModal -> ApiFetch: apiFetch("/api/v1/user/signup", { method: "POST", body: { fullName, email, password } })
+activate ApiFetch
+ApiFetch -> BackendApp: POST /api/v1/user/signup
+activate BackendApp
+BackendApp -> UserRoutes: route("/signup")
+activate UserRoutes
+UserRoutes -> UserController: registerUser(req, res)
+activate UserController
+
+UserController -> UserModel: findOne({ email: email.toLowerCase() })
+UserController -> UserModel: create({ fullName, email, password })
+note right of UserModel
+  userSchema.pre("save") hashes password via bcrypt
+  before persistence in user.model.js
+end note
+UserModel -> Mongo: insert User
+activate Mongo
+Mongo --> UserModel: created user
+deactivate Mongo
+UserController -> UserModel: findById(user._id).select("-password -refreshToken")
+UserController --> AuthModal: 201 { status: "success", message: "Signup successful", user }
+AuthModal -> AuthModal: setIsLogin(true)
+
+deactivate UserController
+deactivate UserRoutes
+deactivate BackendApp
+deactivate ApiFetch
+deactivate AuthModal
+
+== Logout Flow ==
+User -> Layout: Click Logout
+activate Layout
+Layout -> Layout: handleLogout()
+Layout -> ApiFetch: apiFetch("/api/v1/user/logout", { method: "POST" })
+activate ApiFetch
+ApiFetch -> BackendApp: POST /api/v1/user/logout
+activate BackendApp
+BackendApp -> UserRoutes: route("/logout")
+activate UserRoutes
+UserRoutes -> UserController: logoutUser(req, res)
+activate UserController
+
+UserController -> UserController: incomingRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken
+opt incomingRefreshToken exists
+  UserController -> UserModel: findOneAndUpdate({ refreshToken }, { $unset: { refreshToken: 1 } })
+  UserModel -> Mongo: unset refreshToken
+end
+UserController --> Layout: 200 + clearCookie(accessToken, refreshToken)\n{ status: "success", message: "Logout successful" }
+Layout -> App: onLogout() (from props)
+App -> App: setUser(null)
+
+deactivate UserController
+deactivate UserRoutes
+deactivate BackendApp
+deactivate ApiFetch
+deactivate Layout
+
+@enduml

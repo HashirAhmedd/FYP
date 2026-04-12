@@ -1,0 +1,194 @@
+@startuml
+' ClimaX-AI Prediction Sequence (implementation-accurate)
+
+title ClimaX-AI - Prediction Sequence Diagram
+
+!pragma sequenceMessageSpan true
+scale 0.80
+
+autonumber
+hide footbox
+
+actor User
+database "MongoDB" as Mongo
+participant "Prediction.jsx\nfetchPrediction()" as PredictionPage
+participant "ForecastsConfiguration.jsx" as ForecastsConfig
+participant "api.js\npredictionFetch()" as PredictionFetch
+participant "api.js\napiFetch()" as ApiFetch
+participant "Flask app.py\n/api/predict" as FlaskApp
+participant "INFERENCE_EXECUTOR\nThreadPoolExecutor" as Executor
+participant "inference.py\nrun_inference()" as RunInference
+participant "explainable_inference.py\nrun_explainable_inference()" as RunExplain
+participant "llm/service.py\ngenerate_or_get_xai_llm_insights()" as LLMService
+participant "llm/cache.py\nXAILLMInsightCache" as LLMCache
+participant "llm/providers.py\nGemini" as GeminiProvider
+participant "llm/providers.py\nGroq" as GroqProvider
+participant "Node app.js" as NodeApp
+participant "user.routes.js" as UserRoutes
+participant "user.controlers.js\nstoreHistory()" as UserController
+participant "user.model.js\nUser" as UserModel
+
+== Prediction Trigger ==
+User -> PredictionPage: Open Prediction tab or submit forecast config
+activate PredictionPage
+
+alt initial mount
+  PredictionPage -> PredictionPage: useEffect() -> fetchPrediction(defaultConfig)
+else manual submit
+  User -> ForecastsConfig: Submit forecast settings
+  ForecastsConfig -> PredictionPage: fetchPrediction(forecastConfiguration)
+end
+
+PredictionPage -> PredictionPage: setLoading(true)
+
+== Model Prediction API Call ==
+PredictionPage -> PredictionFetch: predictionFetch("/api/predict", { method: "POST", body: forecastConfiguration })
+activate PredictionFetch
+PredictionFetch -> FlaskApp: POST /api/predict
+activate FlaskApp
+
+FlaskApp -> FlaskApp: Validate required fields (country, sector, gas)
+alt missing required fields
+  FlaskApp --> PredictionPage: 400 { error: "Missing required fields" }
+  deactivate FlaskApp
+  deactivate PredictionFetch
+  PredictionPage -> PredictionPage: catch(error)
+else valid request
+  FlaskApp -> FlaskApp: Build user_input { country, sector, gas, year, month, lat, lon }
+
+  par main inference task
+    FlaskApp -> Executor: submit(run_inference, user_input, MODEL, SCALER, INDEXERS)
+    activate Executor
+    Executor -> RunInference: run_inference(...)
+    activate RunInference
+    RunInference --> Executor: { subsector_emissions, monthly_emissions, total_emissions }
+    deactivate RunInference
+  else explainability task
+    FlaskApp -> Executor: submit(run_explainable_inference, user_input, MODEL, SCALER, INDEXERS)
+    Executor -> RunExplain: run_explainable_inference(...)
+    activate RunExplain
+    RunExplain --> Executor: explanation attribution payload
+    deactivate RunExplain
+  end
+  Executor --> FlaskApp: results + explanation
+  deactivate Executor
+
+  FlaskApp -> Executor: submit(generate_or_get_xai_llm_insights, user_input, prediction_data, explanation)
+  activate Executor
+  Executor -> LLMService: generate_or_get_xai_llm_insights(...)
+  activate LLMService
+
+  LLMService -> LLMCache: get_by_normalized_params(normalized_params)
+  activate LLMCache
+  LLMCache -> Mongo: find_one(normalized_params filter)
+  activate Mongo
+  Mongo --> LLMCache: cached_doc or null
+  deactivate Mongo
+  LLMCache --> LLMService: cached_doc
+  deactivate LLMCache
+
+  alt valid cached insight found
+    LLMService --> Executor: { insight_text, provider_used, from_cache: true }
+  else cache miss
+    LLMService -> GeminiProvider: generate_gemini_insights(model_input)
+    activate GeminiProvider
+    GeminiProvider --> LLMService: insight_text or null/error
+    deactivate GeminiProvider
+
+    alt gemini failed or empty
+      LLMService -> GroqProvider: generate_groq_insights(model_input)
+      activate GroqProvider
+      GroqProvider --> LLMService: insight_text or null/error
+      deactivate GroqProvider
+    end
+
+    alt insight generated
+      LLMService -> LLMCache: save(cache_key, normalized_params, insight_text, provider_used)
+      activate LLMCache
+      LLMCache -> Mongo: find_one_and_update(..., upsert=True)
+      activate Mongo
+      Mongo --> LLMCache: saved doc
+      deactivate Mongo
+      LLMCache --> LLMService: saved
+      deactivate LLMCache
+    end
+
+    LLMService --> Executor: { insight_text, provider_used, from_cache: false }
+  end
+
+  Executor --> FlaskApp: llm_result
+  deactivate LLMService
+  deactivate Executor
+
+  FlaskApp -> FlaskApp: Build gas composition for co2/ch4/n2o
+  par other gas total #1
+    FlaskApp -> Executor: submit(_compute_gas_total, user_input, gas_A)
+    activate Executor
+    Executor -> RunInference: run_inference(temp_input_for_gas_A)
+    activate RunInference
+    RunInference --> Executor: total_emissions for gas_A
+    deactivate RunInference
+    Executor --> FlaskApp: gas_A total
+    deactivate Executor
+  else other gas total #2
+    FlaskApp -> Executor: submit(_compute_gas_total, user_input, gas_B)
+    activate Executor
+    Executor -> RunInference: run_inference(temp_input_for_gas_B)
+    activate RunInference
+    RunInference --> Executor: total_emissions for gas_B
+    deactivate RunInference
+    Executor --> FlaskApp: gas_B total
+    deactivate Executor
+  end
+
+  FlaskApp -> FlaskApp: Compose response.data\n(total_emissions, monthly_trends, subsector_breakdown, gas_composition, llm_insights)
+  FlaskApp --> PredictionPage: 200 prediction response JSON
+  deactivate FlaskApp
+  deactivate PredictionFetch
+end
+
+== Save User History ==
+PredictionPage -> ApiFetch: apiFetch("/api/v1/user/history", { method: "POST", body: { email, sector, emission, yearRange } })
+activate ApiFetch
+ApiFetch -> NodeApp: POST /api/v1/user/history
+activate NodeApp
+NodeApp -> UserRoutes: route("/history")
+activate UserRoutes
+UserRoutes -> UserController: storeHistory(req, res)
+activate UserController
+
+UserController -> UserModel: findOne({ email: email.toLowerCase() })
+activate UserModel
+UserModel -> Mongo: find user by email
+activate Mongo
+Mongo --> UserModel: user or null
+deactivate Mongo
+UserModel --> UserController: user
+
+alt user not found
+  UserController --> PredictionPage: 404 { status: "failed", message: "User not found" }
+else user found
+  UserController -> UserController: format sector/emission text
+  UserController -> UserModel: user.history.push({ sector, emission, yearRange, timestamp })
+  UserController -> UserModel: user.save({ validateBeforeSave: false })
+  UserModel -> Mongo: update user history
+  activate Mongo
+  Mongo --> UserModel: saved
+  deactivate Mongo
+  UserController --> PredictionPage: 201 { status: "success", history }
+end
+
+deactivate UserModel
+deactivate UserController
+deactivate UserRoutes
+deactivate NodeApp
+deactivate ApiFetch
+
+== Render Prediction ==
+PredictionPage -> PredictionPage: if response.ok -> setPrediction(data)
+PredictionPage -> PredictionPage: setLoading(false)
+PredictionPage -> User: Render EmissionPrediction + MonthlyTrends + LLMResponse
+
+deactivate PredictionPage
+
+@enduml

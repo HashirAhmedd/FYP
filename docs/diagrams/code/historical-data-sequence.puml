@@ -1,0 +1,183 @@
+@startuml
+' ClimaX-AI Historical Data Sequence (implementation-accurate)
+
+title ClimaX-AI - Historical Data Sequence Diagram
+
+!pragma sequenceMessageSpan true
+scale 0.80
+
+autonumber
+hide footbox
+
+actor User
+database "PostgreSQL (emissions dataset)" as Postgres
+database "MongoDB (users/cache)" as Mongo
+participant "Dashboard.jsx\nfetchHistoricalData()" as Dashboard
+participant "Filters.jsx" as Filters
+participant "api.js\napiFetch()" as ApiFetch
+participant "app.js" as BackendApp
+participant "historical.routes.js" as HistoricalRoutes
+participant "historical.controller.js\ngetSectorEmissions()" as HistoricalController
+participant "insightCache.js" as InsightCacheUtils
+participant "groq.js" as GroqUtils
+participant "gemini.js" as GeminiUtils
+participant "user.routes.js" as UserRoutes
+participant "user.controlers.js\nstoreHistory()" as UserController
+participant "user.model.js\nUser" as UserModel
+participant "insightCache.model.js\nInsightCache" as InsightCacheModel
+
+== Dashboard Load / Filter Submit ==
+User -> Dashboard: Open Dashboard or apply filters
+activate Dashboard
+
+alt initial mount
+  Dashboard -> Dashboard: useEffect() -> fetchHistoricalData(defaultFilters)
+else manual filter submit
+  User -> Filters: Submit selected filters
+  Filters -> Dashboard: fetchHistoricalData(filtersObject)
+end
+
+Dashboard -> Dashboard: setLoading(true)
+
+== Historical API Call ==
+Dashboard -> ApiFetch: apiFetch("/api/v1/historical", { method: "POST", body: filtersObject })
+activate ApiFetch
+ApiFetch -> BackendApp: POST /api/v1/historical
+activate BackendApp
+BackendApp -> HistoricalRoutes: route("/")
+activate HistoricalRoutes
+HistoricalRoutes -> HistoricalController: getSectorEmissions(req, res)
+activate HistoricalController
+
+HistoricalController -> HistoricalController: Validate required fields\n(country, sector_name, start_year, end_year)
+alt missing required fields
+  HistoricalController --> Dashboard: 400 { error: "...required" }
+  deactivate HistoricalController
+  deactivate HistoricalRoutes
+  deactivate BackendApp
+  deactivate ApiFetch
+  Dashboard -> Dashboard: catch(error)
+else valid request
+  HistoricalController -> InsightCacheUtils: buildInsightCacheKey(params)
+  activate InsightCacheUtils
+  InsightCacheUtils --> HistoricalController: { cacheKey, normalizedParams }
+  deactivate InsightCacheUtils
+
+  HistoricalController -> InsightCacheUtils: getCachedInsightByKey(cacheKey)
+  activate InsightCacheUtils
+  InsightCacheUtils -> InsightCacheModel: findOne({ cacheKey }).lean()
+  activate InsightCacheModel
+  InsightCacheModel -> Mongo: query insight cache
+  activate Mongo
+  Mongo --> InsightCacheModel: cachedInsight or null
+  deactivate Mongo
+  InsightCacheModel --> InsightCacheUtils: cachedInsight
+  deactivate InsightCacheModel
+  InsightCacheUtils --> HistoricalController: cachedInsight
+  deactivate InsightCacheUtils
+
+  HistoricalController -> Postgres: Query country id by country name
+  Postgres --> HistoricalController: countryId
+  HistoricalController -> Postgres: Query sector id by sector_name
+  Postgres --> HistoricalController: sectorId
+  HistoricalController -> Postgres: Query subsectors by sector_id
+  Postgres --> HistoricalController: subsectors[]
+
+  alt no country/sector/subsectors found
+    HistoricalController --> Dashboard: 404 { error: "...not found" }
+  else dataset resolved
+    HistoricalController -> Postgres: Query emissions grouped by subsector_id, year\nwithin year range (and optional gas filter)
+    Postgres --> HistoricalController: emission rows
+
+    HistoricalController -> Postgres: Query gas totals for selected range
+    Postgres --> HistoricalController: gasRows
+
+    HistoricalController -> HistoricalController: Build yearly_totals, total_emission_overall,\nsubsector_breakdown, top_emitting_subsector, ratios
+
+    alt cached insight exists
+      HistoricalController -> HistoricalController: finalResponse.llm_insights = cachedInsight.insightText
+    else no cached insight
+      alt GROQ_API_KEY available
+        HistoricalController -> GroqUtils: generateGroqInsights(finalResponse)
+        activate GroqUtils
+        GroqUtils --> HistoricalController: llmInsights or error
+        deactivate GroqUtils
+      end
+
+      alt llmInsights empty and GEMINI_API_KEY available
+        HistoricalController -> GeminiUtils: generateGeminiInsights(finalResponse)
+        activate GeminiUtils
+        GeminiUtils --> HistoricalController: llmInsights
+        deactivate GeminiUtils
+      end
+
+      alt llmInsights generated
+        HistoricalController -> InsightCacheUtils: saveInsightCache({ cacheKey, normalizedParams, insightText, providerUsed })
+        activate InsightCacheUtils
+        InsightCacheUtils -> InsightCacheModel: findOneAndUpdate(..., { upsert: true })
+        activate InsightCacheModel
+        InsightCacheModel -> Mongo: upsert insight cache
+        activate Mongo
+        Mongo --> InsightCacheModel: saved document
+        deactivate Mongo
+        InsightCacheModel --> InsightCacheUtils: saved doc
+        deactivate InsightCacheModel
+        InsightCacheUtils --> HistoricalController: saved
+        deactivate InsightCacheUtils
+      end
+    end
+
+    HistoricalController --> Dashboard: 200 finalResponse JSON
+  end
+
+  deactivate HistoricalController
+  deactivate HistoricalRoutes
+  deactivate BackendApp
+  deactivate ApiFetch
+end
+
+== Store User History (after request call is made) ==
+Dashboard -> ApiFetch: apiFetch("/api/v1/user/history", { method: "POST", body: { email, sector, emission, yearRange } })
+activate ApiFetch
+ApiFetch -> BackendApp: POST /api/v1/user/history
+activate BackendApp
+BackendApp -> UserRoutes: route("/history")
+activate UserRoutes
+UserRoutes -> UserController: storeHistory(req, res)
+activate UserController
+
+UserController -> UserModel: findOne({ email: email.toLowerCase() })
+activate UserModel
+UserModel -> Mongo: query user by email
+activate Mongo
+Mongo --> UserModel: user or null
+deactivate Mongo
+UserModel --> UserController: user
+
+alt user not found
+  UserController --> Dashboard: 404 { status: "failed", message: "User not found" }
+else user found
+  UserController -> UserController: format sector/emission text
+  UserController -> UserModel: user.history.push({ sector, emission, yearRange, timestamp })
+  UserController -> UserModel: user.save({ validateBeforeSave: false })
+  UserModel -> Mongo: update user history
+  activate Mongo
+  Mongo --> UserModel: saved
+  deactivate Mongo
+  UserController --> Dashboard: 201 { status: "success", history }
+end
+
+deactivate UserModel
+deactivate UserController
+deactivate UserRoutes
+deactivate BackendApp
+deactivate ApiFetch
+
+== Render Result ==
+Dashboard -> Dashboard: if response.ok -> setHistoricalData(data)
+Dashboard -> Dashboard: setLoading(false)
+Dashboard -> User: Render Emission + Visualizations + LLMResponse
+
+deactivate Dashboard
+
+@enduml

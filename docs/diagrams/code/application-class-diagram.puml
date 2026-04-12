@@ -1,0 +1,232 @@
+@startuml
+' ClimaX-AI Overall Application Class Diagram
+
+title ClimaX-AI - Overall Application Class Diagram
+
+hide empty members
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+left to right direction
+
+package "Frontend (React + Vite)" {
+  class App {
+    +bootstrapSession()
+    +decodeJwtPayload(token)
+    +extractUserFromPayload(payload)
+    +handleLoginSuccess(userInfo)
+    +handleLogout()
+  }
+
+  class AuthModal {
+    +handleLoginSubmit(e)
+    +handleSignupSubmit(e)
+  }
+
+  class Layout {
+    +handleLogout()
+    -activeMenu: string
+  }
+
+  class Dashboard {
+    +fetchHistoricalData(filtersObject)
+    -historicalData
+    -loading: boolean
+  }
+
+  class Prediction {
+    +fetchPrediction(forecastConfiguration)
+    -prediction
+    -loading: boolean
+  }
+
+  class DataDownload {
+    +handleGetData()
+    +handleDownload(format)
+  }
+
+  class UserHistory {
+    +fetchHistoryData()
+    +calculateSummaryStats(history)
+    +applyFilters()
+  }
+
+  class "api.js" as ApiClient <<module>> {
+    +buildApiUrl(path)
+    +buildPredictionApiUrl(path)
+    +apiFetch(path, options)
+    +predictionFetch(path, options)
+  }
+}
+
+package "Backend (Node.js + Express)" {
+  class "app.js" as ExpressApp <<module>>
+
+  class UserRoutes <<module>> {
+    +POST /signup
+    +POST /login
+    +POST /refresh-token
+    +POST /logout
+    +POST /history
+    +GET /history/:email
+  }
+
+  class HistoricalRoutes <<module>> {
+    +POST /
+  }
+
+  class DataRoutes <<module>> {
+    +GET /download
+  }
+
+  class UserController <<module>> {
+    +registerUser(req, res)
+    +loginUser(req, res)
+    +refreshAccessToken(req, res)
+    +logoutUser(req, res)
+    +storeHistory(req, res)
+    +getHistory(req, res)
+  }
+
+  class HistoricalController <<module>> {
+    +getSectorEmissions(req, res)
+  }
+
+  class DataController <<module>> {
+    +downloadData(req, res)
+  }
+
+  class User {
+    +fullName: String
+    +email: String
+    +password: String
+    +history: Array
+    +refreshToken: String
+    +comparePassword(candidatePassword)
+    +generateAccessToken()
+    +generateRefreshToken()
+  }
+
+  class InsightCache {
+    +cacheKey: String
+    +normalizedParams: Object
+    +insightText: String
+    +providerUsed: String
+  }
+
+  class InsightCacheUtil <<module>> {
+    +buildInsightCacheKey(params)
+    +getCachedInsightByKey(cacheKey)
+    +saveInsightCache(payload)
+  }
+
+  class GroqService <<module>> {
+    +generateGroqInsights(finalResponse)
+  }
+
+  class GeminiService <<module>> {
+    +generateGeminiInsights(finalResponse)
+  }
+
+  class MongoConnection <<module>> {
+    +connectDB()
+  }
+
+  class PrismaClientProxy <<module>> {
+    +getPrisma()
+  }
+}
+
+package "Model Service (Python Flask + ML)" {
+  class FlaskPredictionAPI <<module>> {
+    +health()
+    +predict()
+    +explain()
+    -_compute_gas_total(user_input, api_gas)
+  }
+
+  class ModelLoader <<module>> {
+    +load_model()
+    +load_scaler()
+    +load_indexers()
+  }
+
+  class InferenceService <<module>> {
+    +run_inference(user_input, model, scaler_model, indexers)
+  }
+
+  class ExplainableInferenceService <<module>> {
+    +run_explainable_inference(user_input, model, scaler_model, indexers)
+  }
+
+  class LLMInsightService <<module>> {
+    +generate_or_get_xai_llm_insights(user_input, prediction_data, explanation_data)
+  }
+
+  class XAILLMInsightCache {
+    +enabled: bool
+    +build_cache_key(payload)
+    +get(cache_key)
+    +get_by_normalized_params(normalized_params)
+    +save(cache_key, normalized_params, insight_text, provider_used)
+  }
+
+  class LLMProviders <<module>> {
+    +generate_gemini_insights(model_input)
+    +generate_groq_insights(model_input)
+  }
+}
+
+class MongoDB <<database>>
+class PostgreSQL <<database>>
+class GeminiAPI <<external>>
+class GroqAPI <<external>>
+
+App --> AuthModal : renders
+App --> Layout : renders after auth
+Layout --> Dashboard : menu navigation
+Layout --> Prediction : menu navigation
+Layout --> DataDownload : menu navigation
+Layout --> UserHistory : menu navigation
+
+Dashboard --> ApiClient : uses apiFetch()
+Prediction --> ApiClient : uses predictionFetch(), apiFetch()
+AuthModal --> ApiClient : uses apiFetch()
+DataDownload --> ApiClient : uses apiFetch()
+UserHistory --> ApiClient : uses apiFetch()
+
+ApiClient ..> ExpressApp : /api/v1/*
+Prediction ..> FlaskPredictionAPI : /api/predict
+
+ExpressApp --> UserRoutes
+ExpressApp --> HistoricalRoutes
+ExpressApp --> DataRoutes
+
+UserRoutes --> UserController
+HistoricalRoutes --> HistoricalController
+DataRoutes --> DataController
+
+UserController --> User
+HistoricalController --> PrismaClientProxy
+HistoricalController --> InsightCacheUtil
+HistoricalController --> GroqService
+HistoricalController --> GeminiService
+DataController --> PrismaClientProxy
+InsightCacheUtil --> InsightCache
+
+MongoConnection --> MongoDB
+User --> MongoDB
+InsightCache --> MongoDB
+PrismaClientProxy --> PostgreSQL
+
+FlaskPredictionAPI --> ModelLoader
+FlaskPredictionAPI --> InferenceService
+FlaskPredictionAPI --> ExplainableInferenceService
+FlaskPredictionAPI --> LLMInsightService
+
+LLMInsightService --> XAILLMInsightCache
+LLMInsightService --> LLMProviders
+XAILLMInsightCache --> MongoDB
+LLMProviders --> GeminiAPI
+LLMProviders --> GroqAPI
+
+@enduml
