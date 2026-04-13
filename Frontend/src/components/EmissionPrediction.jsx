@@ -23,7 +23,7 @@ ChartJS.register(
   Tooltip,
   Legend,
   Filler,
-  ArcElement
+  ArcElement,
 );
 
 export default function EmissionPrediction({ prediction }) {
@@ -108,8 +108,7 @@ export default function EmissionPrediction({ prediction }) {
     if (!prediction?.data?.monthly_trends) return [];
 
     const monthlyTrends = prediction.data.monthly_trends;
-    
-    
+
     // Based on your API response, it looks like monthly_trends has 12 values
     // Let's check if we have all 12 months
     if (monthlyTrends.length >= 12) {
@@ -135,7 +134,6 @@ export default function EmissionPrediction({ prediction }) {
   // Prepare datasets for line chart
   const processedData = processMonthlyData();
   const normalizedRatios = getNormalizedGasRatios();
-
 
   const lineChartData = {
     labels: [
@@ -176,14 +174,14 @@ export default function EmissionPrediction({ prediction }) {
     if (!composition) return null;
 
     const gases = getAvailableGases();
-    
+
     return {
       labels: gases.map((gas) => `${gas.toUpperCase()}`),
       datasets: [
         {
           data: gases.map((gas) => normalizedRatios[gas] || 0),
           backgroundColor: gases.map(
-            (gas) => gasColors[gas]?.primary || "#fb923c"
+            (gas) => gasColors[gas]?.primary || "#fb923c",
           ),
           borderColor: gases.map((gas) => "#ffffff"),
           borderWidth: 2,
@@ -229,7 +227,7 @@ export default function EmissionPrediction({ prediction }) {
         callbacks: {
           label: function (context) {
             return `${context.dataset.label}: ${context.parsed.y.toFixed(
-              2
+              2,
             )} units`;
           },
         },
@@ -321,7 +319,7 @@ export default function EmissionPrediction({ prediction }) {
           font: {
             size: 12,
           },
-          generateLabels: function(chart) {
+          generateLabels: function (chart) {
             const data = chart.data;
             if (data.labels.length && data.datasets.length) {
               return data.labels.map((label, i) => {
@@ -332,12 +330,12 @@ export default function EmissionPrediction({ prediction }) {
                   strokeStyle: data.datasets[0].borderColor[i],
                   lineWidth: data.datasets[0].borderWidth,
                   hidden: false,
-                  index: i
+                  index: i,
                 };
               });
             }
             return [];
-          }
+          },
         },
       },
       tooltip: {
@@ -349,17 +347,16 @@ export default function EmissionPrediction({ prediction }) {
             const absoluteTotals = composition?.absolute_totals || {};
             const gas = label.toLowerCase();
             const absoluteValue = absoluteTotals[gas] || 0;
-            
+
             return [
               `Ratio: ${ratioValue.toFixed(4)}`,
-              `Absolute: ${absoluteValue.toFixed(2)} units`
+              `Absolute: ${absoluteValue.toFixed(2)} units`,
             ];
           },
         },
       },
     },
     cutout: "60%",
-   
   };
 
   // Handle no data scenario
@@ -439,16 +436,20 @@ export default function EmissionPrediction({ prediction }) {
                           </span>
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 divide-x divide-gray-100 border-t border-gray-100">
                         <div className="p-2 text-center">
-                          <div className="text-xs text-gray-500 mb-1">Ratio</div>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Ratio
+                          </div>
                           <div className="text-sm font-semibold text-gray-900">
                             {ratio.toFixed(4)}
                           </div>
                         </div>
                         <div className="p-2 text-center">
-                          <div className="text-xs text-gray-500 mb-1">Absolute</div>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Absolute
+                          </div>
                           <div className="text-sm font-semibold text-gray-900">
                             {absolute.toFixed(2)}
                           </div>
@@ -457,7 +458,7 @@ export default function EmissionPrediction({ prediction }) {
                     </div>
                   );
                 })}
-                
+
                 {/* Total Combined Emissions */}
                 {prediction.data.gas_composition?.total_combined && (
                   <div className="mt-4 pt-4 border-t border-gray-300">
@@ -467,12 +468,11 @@ export default function EmissionPrediction({ prediction }) {
                       </span>
                       <span className="text-sm font-bold text-gray-900">
                         {prediction.data.gas_composition.total_combined.toFixed(
-                          2
+                          2,
                         )}{" "}
                         units
                       </span>
                     </div>
-            
                   </div>
                 )}
               </div>
@@ -543,7 +543,6 @@ export default function EmissionPrediction({ prediction }) {
           </p>
         </div>
       </div>
-
     </div>
   );
 }
