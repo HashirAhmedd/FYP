@@ -1,0 +1,42 @@
+[
+  {
+    "key": "backend",
+    "label": "Backend",
+    "category": "whitebox",
+    "command": "cmd.exe /c npm.cmd run test:json",
+    "exitCode": 1,
+    "startedAt": 1776024837865,
+    "finishedAt": 1776024857293,
+    "durationMs": 19428
+  },
+  {
+    "key": "frontend",
+    "label": "Frontend",
+    "category": "whitebox",
+    "command": "cmd.exe /c npm.cmd run test:json",
+    "exitCode": 1,
+    "startedAt": 1776024857293,
+    "finishedAt": 1776024876185,
+    "durationMs": 18892
+  },
+  {
+    "key": "model",
+    "label": "Model",
+    "category": "whitebox",
+    "command": "D:\\Projects\\FYP\\Model\\venv\\Scripts\\python.exe -m pytest tests/whitebox/model --junitxml D:\\Projects\\FYP\\reports\\raw\\model-results.xml",
+    "exitCode": 1,
+    "startedAt": 1776024876185,
+    "finishedAt": 1776024881936,
+    "durationMs": 5751
+  },
+  {
+    "key": "e2e",
+    "label": "E2E",
+    "category": "blackbox",
+    "command": "D:\\Projects\\FYP\\Model\\venv\\Scripts\\python.exe -m pytest tests/blackbox/e2e --junitxml D:\\Projects\\FYP\\reports\\raw\\e2e-results.xml",
+    "exitCode": 0,
+    "startedAt": 1776024881936,
+    "finishedAt": 1776024914055,
+    "durationMs": 32119
+  }
+]

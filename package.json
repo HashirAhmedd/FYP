@@ -1,0 +1,10 @@
+{
+  "name": "fyp-testing-framework",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "test:all": "node scripts/run-all-tests.js",
+    "report:merge": "node scripts/merge-test-reports.js"
+  }
+}

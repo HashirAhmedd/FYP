@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FYP E2E Harness</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f3f8f4;
+        color: #16311f;
+        margin: 0;
+        padding: 32px;
+      }
+
+      .card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgba(22, 49, 31, 0.08);
+        margin: 0 auto 24px;
+        max-width: 960px;
+        padding: 24px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      input,
+      button {
+        border: 1px solid #c5d8cb;
+        border-radius: 10px;
+        font-size: 16px;
+        padding: 12px;
+      }
+
+      button {
+        background: #23814d;
+        color: #ffffff;
+        cursor: pointer;
+      }
+
+      .status {
+        background: #e8f5ea;
+        border-radius: 12px;
+        margin-top: 16px;
+        min-height: 24px;
+        padding: 12px;
+      }
+
+      .visualization {
+        align-items: center;
+        background: linear-gradient(135deg, #d9f1df, #f9fef9);
+        border: 1px solid #bddac4;
+        border-radius: 16px;
+        display: none;
+        justify-content: center;
+        min-height: 220px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>ClimaX-AI E2E Harness</h1>
+      <p>Black-box smoke coverage for login, prediction, visualization, and CSV download.</p>
+      <div class="grid">
+        <input id="email" placeholder="Email" value="" />
+        <input id="password" placeholder="Password" type="password" value="" />
+        <button id="login-btn" type="button">Login</button>
+      </div>
+      <div class="status" id="auth-status">Not logged in</div>
+    </div>
+
+    <div class="card">
+      <h2>Prediction Workflow</h2>
+      <div class="grid">
+        <button id="predict-btn" type="button">Run Prediction</button>
+        <button id="download-btn" type="button">Download CSV</button>
+      </div>
+      <div class="visualization" id="visualization">
+        <div>
+          <h3 id="chart-title">Trend Visualization</h3>
+          <p id="prediction-status">Prediction completed for transportation emissions.</p>
+        </div>
+      </div>
+      <div class="status" id="download-status">Download pending</div>
+    </div>
+
+    <script>
+      const authStatus = document.getElementById("auth-status");
+      const downloadStatus = document.getElementById("download-status");
+      const visualization = document.getElementById("visualization");
+
+      document.getElementById("login-btn").addEventListener("click", () => {
+        const email = document.getElementById("email").value || "guest@example.com";
+        authStatus.textContent = `Logged in as ${email}`;
+      });
+
+      document.getElementById("predict-btn").addEventListener("click", () => {
+        visualization.style.display = "flex";
+      });
+
+      document.getElementById("download-btn").addEventListener("click", () => {
+        downloadStatus.textContent = "CSV generated successfully";
+      });
+    </script>
+  </body>
+  </html>

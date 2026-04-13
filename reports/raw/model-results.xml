@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="6" time="0.888" timestamp="2026-04-13T01:14:40.554101+05:00" hostname="Lenovo"><testcase classname="tests.whitebox.model.test_inference" name="test_run_inference_aggregates_subsector_predictions" time="0.002"><failure message="TypeError: StubModel.predict() got an unexpected keyword argument 'verbose'">def test_run_inference_aggregates_subsector_predictions():
+        from api_utils import inference
+    
+        inference.preprocess_input = lambda *_args, **_kwargs: build_preprocessed_data()
+    
+&gt;       result = run_inference(
+            {"country": "PAK"},
+            StubModel(),
+            scaler_model={},
+            indexers={},
+        )
+
+D:\Projects\FYP\tests\whitebox\model\test_inference.py:24: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+user_input = {'country': 'PAK'}
+model = &lt;test_inference.StubModel object at 0x0000025F69F15210&gt;
+scaler_model = {}, indexers = {}
+
+    def run_inference(user_input, model, scaler_model, indexers):
+        preprocessed_data = preprocess_input(user_input, scaler_model, indexers)
+    
+        if not preprocessed_data:
+            return {
+                "subsector_emissions": {},
+                "monthly_emissions": [0.0] * 12,
+                "total_emissions": 0.0,
+            }
+    
+        response = {
+            "subsector_emissions": {},
+            "monthly_emissions": [0.0] * 12,
+            "total_emissions": 0.0
+        }
+    
+        subsectors = list(preprocessed_data.keys())
+        stacked_sequences = np.stack([preprocessed_data[subsector] for subsector in subsectors], axis=0)
+    
+        cat_input = stacked_sequences[:, :, :4]      # First 4 are categorical
+        num_input = stacked_sequences[:, :, 4:]      # Remaining 6 are numerical
+    
+&gt;       predictions = model.predict([cat_input, num_input], verbose=0)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: StubModel.predict() got an unexpected keyword argument 'verbose'
+
+D:\Projects\FYP\Model\api_utils\inference.py:26: TypeError</failure></testcase><testcase classname="tests.whitebox.model.test_inference" name="test_run_inference_with_mocked_preprocessing" time="0.002"><failure message="TypeError: StubModel.predict() got an unexpected keyword argument 'verbose'">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000025F7809DAD0&gt;
+
+    def test_run_inference_with_mocked_preprocessing(monkeypatch):
+        monkeypatch.setattr(
+            "api_utils.inference.preprocess_input",
+            lambda *_args, **_kwargs: build_preprocessed_data(),
+        )
+    
+&gt;       result = run_inference(
+            {"country": "PAK"},
+            StubModel(),
+            scaler_model={},
+            indexers={},
+        )
+
+D:\Projects\FYP\tests\whitebox\model\test_inference.py:41: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+user_input = {'country': 'PAK'}
+model = &lt;test_inference.StubModel object at 0x0000025F69E8B610&gt;
+scaler_model = {}, indexers = {}
+
+    def run_inference(user_input, model, scaler_model, indexers):
+        preprocessed_data = preprocess_input(user_input, scaler_model, indexers)
+    
+        if not preprocessed_data:
+            return {
+                "subsector_emissions": {},
+                "monthly_emissions": [0.0] * 12,
+                "total_emissions": 0.0,
+            }
+    
+        response = {
+            "subsector_emissions": {},
+            "monthly_emissions": [0.0] * 12,
+            "total_emissions": 0.0
+        }
+    
+        subsectors = list(preprocessed_data.keys())
+        stacked_sequences = np.stack([preprocessed_data[subsector] for subsector in subsectors], axis=0)
+    
+        cat_input = stacked_sequences[:, :, :4]      # First 4 are categorical
+        num_input = stacked_sequences[:, :, 4:]      # Remaining 6 are numerical
+    
+&gt;       predictions = model.predict([cat_input, num_input], verbose=0)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: StubModel.predict() got an unexpected keyword argument 'verbose'
+
+D:\Projects\FYP\Model\api_utils\inference.py:26: TypeError</failure></testcase><testcase classname="tests.whitebox.model.test_inference" name="test_run_inference_returns_empty_totals_when_preprocessing_yields_no_sequences" time="0.001" /><testcase classname="tests.whitebox.model.test_preprocessing" name="test_preprocess_input_builds_yearly_sequences_for_each_subsector" time="0.004" /><testcase classname="tests.whitebox.model.test_preprocessing" name="test_preprocess_input_uses_default_coordinates_when_missing" time="0.003" /><testcase classname="tests.whitebox.model.test_preprocessing" name="test_preprocess_input_returns_empty_result_for_unknown_sector" time="0.001" /></testsuite></testsuites>
