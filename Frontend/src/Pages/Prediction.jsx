@@ -15,7 +15,7 @@ export default function Prediction({ userEmail }) {
       country: "PAK",
       sector: "transportation",
       gas: "co2",
-      year: 2025,
+      year: 2026,
     });
   }, []);
 

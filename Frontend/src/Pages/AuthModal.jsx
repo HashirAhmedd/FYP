@@ -184,7 +184,7 @@ const AuthModal = ({ onLoginSuccess }) => {
                       type="email"
                       required
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none"
-                      placeholder="you@example.com"
+                      placeholder="you@gmail.com"
                       value={loginData.email}
                       onChange={(e) =>
                         setLoginData({ ...loginData, email: e.target.value })
@@ -275,7 +275,7 @@ const AuthModal = ({ onLoginSuccess }) => {
                       type="text"
                       required
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none"
-                      placeholder="Hahsir Ahmed"
+                      placeholder="your name here..."
                       value={signupData.name}
                       onChange={(e) =>
                         setSignupData({ ...signupData, name: e.target.value })
@@ -308,7 +308,7 @@ const AuthModal = ({ onLoginSuccess }) => {
                       type="email"
                       required
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none"
-                      placeholder="you@example.com"
+                      placeholder="you@gmail.com"
                       value={signupData.email}
                       onChange={(e) =>
                         setSignupData({ ...signupData, email: e.target.value })

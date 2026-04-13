@@ -61,6 +61,48 @@ export default function EmissionPrediction({ prediction }) {
     return gases;
   };
 
+  const getNormalizedGasRatios = () => {
+    const composition = prediction?.data?.gas_composition;
+    if (!composition) return {};
+
+    const gases = getAvailableGases();
+    const ratios = composition.ratios || {};
+    const absoluteTotals = composition.absolute_totals || {};
+
+    const rawValues = gases.map((gas) => Number(ratios[gas]) || 0);
+    const rawSum = rawValues.reduce((sum, value) => sum + value, 0);
+
+    // Backend may send percentages (0-100). Convert to fractions and normalize.
+    if (rawSum > 0) {
+      const converted =
+        rawSum > 1.5 ? rawValues.map((value) => value / 100) : rawValues;
+      const convertedSum = converted.reduce((sum, value) => sum + value, 0);
+
+      if (convertedSum > 0) {
+        return gases.reduce((acc, gas, index) => {
+          acc[gas] = converted[index] / convertedSum;
+          return acc;
+        }, {});
+      }
+    }
+
+    // Fallback: derive ratios from absolutes when ratios are missing/invalid.
+    const absoluteValues = gases.map((gas) => Number(absoluteTotals[gas]) || 0);
+    const absoluteSum = absoluteValues.reduce((sum, value) => sum + value, 0);
+
+    if (absoluteSum > 0) {
+      return gases.reduce((acc, gas, index) => {
+        acc[gas] = absoluteValues[index] / absoluteSum;
+        return acc;
+      }, {});
+    }
+
+    return gases.reduce((acc, gas) => {
+      acc[gas] = 0;
+      return acc;
+    }, {});
+  };
+
   // Transform monthly trends data for chart - FIXED
   const processMonthlyData = () => {
     if (!prediction?.data?.monthly_trends) return [];
@@ -92,6 +134,7 @@ export default function EmissionPrediction({ prediction }) {
 
   // Prepare datasets for line chart
   const processedData = processMonthlyData();
+  const normalizedRatios = getNormalizedGasRatios();
 
 
   const lineChartData = {
@@ -133,15 +176,12 @@ export default function EmissionPrediction({ prediction }) {
     if (!composition) return null;
 
     const gases = getAvailableGases();
-    const ratios = composition.ratios || {};
-    const absoluteTotals = composition.absolute_totals || {};
-
-    // Use ratios for the chart (percentages)
+    
     return {
       labels: gases.map((gas) => `${gas.toUpperCase()}`),
       datasets: [
         {
-          data: gases.map((gas) => ratios[gas] || 0),
+          data: gases.map((gas) => normalizedRatios[gas] || 0),
           backgroundColor: gases.map(
             (gas) => gasColors[gas]?.primary || "#fb923c"
           ),
@@ -287,7 +327,7 @@ export default function EmissionPrediction({ prediction }) {
               return data.labels.map((label, i) => {
                 const ratioValue = data.datasets[0].data[i];
                 return {
-                  text: `${label}: ${ratioValue.toFixed(2)}`,
+                  text: `${label}: ${ratioValue.toFixed(4)}`,
                   fillStyle: data.datasets[0].backgroundColor[i],
                   strokeStyle: data.datasets[0].borderColor[i],
                   lineWidth: data.datasets[0].borderWidth,
@@ -311,7 +351,7 @@ export default function EmissionPrediction({ prediction }) {
             const absoluteValue = absoluteTotals[gas] || 0;
             
             return [
-              `Ratio: ${ratioValue.toFixed(2)}`,
+              `Ratio: ${ratioValue.toFixed(4)}`,
               `Absolute: ${absoluteValue.toFixed(2)} units`
             ];
           },
@@ -373,14 +413,14 @@ export default function EmissionPrediction({ prediction }) {
                 <Doughnut data={gasCompositionData} options={doughnutOptions} />
                 <div className="text-center mt-2">
                   <p className="text-xs text-gray-500">
-                    Shows ratio distribution (%)
+                    Shows ratio distribution
                   </p>
                 </div>
               </div>
               <div className="space-y-3">
                 {getAvailableGases().map((gas) => {
                   const composition = prediction.data.gas_composition;
-                  const ratio = composition.ratios?.[gas] || 0;
+                  const ratio = normalizedRatios[gas] || 0;
                   const absolute = composition.absolute_totals?.[gas] || 0;
 
                   return (
@@ -404,7 +444,7 @@ export default function EmissionPrediction({ prediction }) {
                         <div className="p-2 text-center">
                           <div className="text-xs text-gray-500 mb-1">Ratio</div>
                           <div className="text-sm font-semibold text-gray-900">
-                            {ratio.toFixed(2)}
+                            {ratio.toFixed(4)}
                           </div>
                         </div>
                         <div className="p-2 text-center">
